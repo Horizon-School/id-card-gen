@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Batch Generation — ID Card Generator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231e6e3a'/%3E%3Ctext x='50%25' y='52%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-weight='700' font-size='18'%3EID%3C/text%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="db.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+
+    :root {
+      --surface-0: #ffffff;--surface-25: #f6f7f6;--surface-50: #f1f3f2;--surface-100: #e8ebea;
+      --surface-200: #d6dbd9;--surface-300: #c2c8c6;--surface-400: #9fa7a4;--surface-500: #7a8380;
+      --surface-600: #5a6360;--surface-700: #3d4543;--surface-800: #252b29;
+      --accent-50: #eef5f0;--accent-100:#d4e8d9;--accent-400: #4ea66a;--accent-500: #2d8a4e;--accent-600: #1e6e3a;
+      --accent-700: #18582d;--accent-800: #144723;--danger-500: #c93535;
+      --font-sans: 'DM Sans', system-ui, sans-serif;
+      --radius-sm: 4px;--radius-md: 6px;--radius-lg: 8px;
+      --shadow-canvas: 0 0 0 1px rgb(0 0 0 / 0.04), 0 8px 16px -4px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+      --shadow-elevated: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 1px 3px -1px rgb(0 0 0 / 0.04);
+      --text-caption: 0.6875rem;--text-xs: 0.75rem;--text-sm: 0.8125rem;
+      --text-body: 0.875rem;--text-subhead: 1rem;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans);font-size: var(--text-body);background: var(--surface-50);
+      color: var(--surface-800);margin: 0;min-height: 100vh;-webkit-font-smoothing: antialiased;
+    }
+
+    header { background: white; border-bottom: 1px solid var(--surface-200); padding: 0.5rem 1rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+
+    .nav-tab {
+      display: inline-flex; align-items: center; padding: 0.625rem 1rem;
+      font-size: var(--text-sm); font-weight: 500; font-family: var(--font-sans);
+      color: var(--surface-500); text-decoration: none;
+      border-bottom: 2px solid transparent; transition: color 0.15s ease, border-color 0.15s ease;
+    }
+    .nav-tab:hover { color: var(--surface-800); }
+    .nav-tab.active { color: var(--accent-600); border-bottom-color: var(--accent-600); font-weight: 600; }
+
+    .btn-primary, .btn-secondary, .btn-ghost {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 1rem; font-size: var(--text-sm); font-weight: 500;
+      font-family: var(--font-sans); border-radius: var(--radius-md); cursor: pointer;
+      transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+      white-space: nowrap; text-decoration: none; border: 1px solid transparent;
+    }
+    .btn-primary { color: white; background: var(--accent-600); border-color: var(--accent-600); position: relative; }
+    .btn-primary:hover { background: var(--accent-700); box-shadow: var(--shadow-elevated); }
+    .btn-primary:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+    .btn-primary:active { background: var(--accent-800); }
+    .btn-primary:disabled { background: var(--surface-200); border-color: var(--surface-200); color: var(--surface-400); cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .btn-primary.loading { pointer-events: none; opacity: 0.85; }
+    .btn-primary.loading .btn-label { opacity: 0; position: absolute; }
+    .btn-primary .spinner { display: none; width: 16px; height: 16px; border: 2px solid var(--surface-200); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    .btn-primary.loading .spinner { display: inline-block; }
+
+    .btn-secondary { color: var(--surface-700); background: white; border-color: var(--surface-200); position: relative; }
+    .btn-secondary:hover { background: var(--surface-50); border-color: var(--surface-300); }
+    .btn-secondary:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+    .btn-secondary:disabled { color: var(--surface-400); background: var(--surface-25); border-color: var(--surface-200); cursor: not-allowed; }
+    .btn-secondary.loading { pointer-events: none; opacity: 0.85; }
+    .btn-secondary.loading .btn-label { opacity: 0; position: absolute; }
+    .btn-secondary .spinner { display: none; width: 16px; height: 16px; border: 2px solid var(--surface-200); border-top-color: var(--accent-500); border-radius: 50%; animation: spin 0.6s linear infinite; }
+    .btn-secondary.loading .spinner { display: inline-block; }
+
+    .btn-ghost { color: var(--surface-600); background: transparent; border-color: transparent; padding: 0.25rem 0.75rem; font-size: var(--text-xs); cursor: pointer; font-family: var(--font-sans); border-radius: var(--radius-md); }
+    .btn-ghost:hover { background: var(--surface-50); color: var(--surface-800); }
+    .btn-ghost:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+
+    .form-input, .form-select {
+      padding: 0.5rem 0.75rem; font-size: var(--text-body); font-family: var(--font-sans);
+      color: var(--surface-800); background: white; border: 1px solid var(--surface-200);
+      border-radius: var(--radius-md); outline: none; transition: border-color 0.15s ease;
+      width: 100%;
+    }
+    .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a8380' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.25rem; cursor: pointer; }
+    .form-input:focus, .form-select:focus { border-color: var(--accent-400); box-shadow: 0 0 0 3px rgb(46 138 78 / 0.12); }
+    .form-input::placeholder { color: var(--surface-400); }
+    .form-label { display: block; font-size: var(--text-xs); font-weight: 500; color: var(--surface-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+
+    /* ── Step sections ─────────────────────────── */
+    .step-section {
+      background: white; border: 1px solid var(--surface-200);
+      border-radius: var(--radius-lg);
+      transition: box-shadow 0.2s ease;
+    }
+    .step-section + .step-section { margin-top: 0.75rem; }
+    .step-section.expanded { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+
+    .step-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.875rem 1.25rem; cursor: pointer; user-select: none;
+      transition: background 0.15s ease; border: none; background: none;
+      width: 100%; font-family: var(--font-sans); text-align: left; color: var(--surface-800);
+    }
+    .step-header:hover { background: var(--surface-25); }
+    .step-header:focus-visible { outline: 2px solid var(--accent-400); outline-offset: -2px; border-radius: var(--radius-lg); }
+
+    .step-badge {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--surface-100); color: var(--surface-500);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs); font-weight: 700; flex-shrink: 0;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .step-section.expanded .step-badge { background: var(--accent-500); color: white; }
+
+    .step-title-group { flex: 1; min-width: 0; }
+    .step-title { font-size: var(--text-sm); font-weight: 600; color: var(--surface-800); display: block; }
+    .step-desc { font-size: var(--text-caption); color: var(--surface-400); font-weight: 400; display: block; margin-top: 1px; }
+
+    .step-chevron {
+      width: 20px; height: 20px; color: var(--surface-400); flex-shrink: 0;
+      transition: transform 0.25s ease;
+    }
+    .step-section.expanded .step-chevron { transform: rotate(180deg); }
+
+    .step-body { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+    .step-section.expanded .step-body { max-height: 4000px; }
+    .step-body-inner { padding: 0 1.25rem 1.25rem; }
+
+    /* ── Tooltip ──────────────────────────────── */
+    .tooltip-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: var(--surface-100); color: var(--surface-500);
+      font-size: 9px; font-weight: 700; cursor: help;
+      vertical-align: middle; margin-left: 3px;
+    }
+    .tooltip-icon:hover { background: var(--surface-200); color: var(--surface-700); }
+
+    /* ── Template library ───────────────────────── */
+    .template-banner {
+      background: linear-gradient(135deg, var(--accent-50), #f0f7f2);
+      border: 1px solid var(--accent-100); border-radius: var(--radius-lg);
+      padding: 0.875rem 1.25rem; display: flex; align-items: center; gap: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .selectable-card {
+      background: white; border: 2px solid var(--surface-200); border-radius: var(--radius-md);
+      cursor: pointer; overflow: hidden; outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .selectable-card:hover { border-color: var(--surface-400); }
+    .selectable-card:focus-visible { border-color: var(--accent-400); box-shadow: 0 0 0 3px rgb(46 138 78 / 0.20); }
+    .selectable-card.selected { border-color: var(--accent-500); box-shadow: 0 0 0 3px rgb(45 138 78 / 0.15); background: var(--accent-50); }
+
+    /* ── Rich text editor ─────────────────────────── */
+    .rte-wrap {
+      border: 1px solid var(--surface-200); border-radius: var(--radius-md);
+      overflow: hidden; background: white;
+      transition: border-color 0.15s ease;
+    }
+    .rte-wrap:focus-within { border-color: var(--accent-400); box-shadow: 0 0 0 3px rgb(46 138 78 / 0.12); }
+    .rte-toolbar {
+      display: flex; align-items: center; gap: 2px; padding: 0.375rem 0.5rem;
+      background: var(--surface-25); border-bottom: 1px solid var(--surface-100);
+      flex-wrap: wrap;
+    }
+    .rte-toolbar-group { display: flex; align-items: center; gap: 1px; }
+    .rte-toolbar-group + .rte-toolbar-group::before {
+      content: ''; display: block; width: 1px; height: 18px;
+      background: var(--surface-200); margin: 0 3px;
+    }
+    .rte-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 26px; border: none; border-radius: var(--radius-sm);
+      background: transparent; cursor: pointer; color: var(--surface-600);
+      font-size: 11px; font-weight: 600; font-family: var(--font-sans);
+      transition: background 0.1s ease, color 0.1s ease;
+    }
+    .rte-btn:hover { background: var(--surface-100); color: var(--surface-800); }
+    .rte-btn.active { background: var(--accent-100); color: var(--accent-700); }
+    .rte-btn svg { pointer-events: none; }
+    .rte-color-swatch {
+      width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--surface-200);
+      margin-right: 2px;
+    }
+    .rte-fontsize {
+      font-size: 11px; font-weight: 500; padding: 0 6px; min-width: 48px;
+      cursor: pointer; border: none; background: transparent; color: var(--surface-600);
+      font-family: var(--font-sans); border-radius: var(--radius-sm); height: 26px;
+    }
+    .rte-fontsize:hover { background: var(--surface-100); }
+    .rte-color-popup {
+      position: absolute; top: 100%; left: 0; z-index: 10;
+      background: white; border: 1px solid var(--surface-200); border-radius: var(--radius-md);
+      box-shadow: 0 4px 16px rgb(0 0 0 / 0.12); padding: 0.5rem;
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;
+    }
+    .rte-color-chip {
+      width: 22px; height: 22px; border-radius: 3px; cursor: pointer;
+      border: 1px solid var(--surface-100); transition: transform 0.1s;
+    }
+    .rte-color-chip:hover { transform: scale(1.15); border-color: var(--surface-400); }
+    .rte-editor {
+      min-height: 80px; padding: 0.5rem 0.75rem; outline: none;
+      font-size: var(--text-body); font-family: var(--font-sans);
+      color: var(--surface-800); line-height: 1.6;
+    }
+    .rte-editor:empty::before {
+      content: attr(data-placeholder); color: var(--surface-400);
+      pointer-events: none;
+    }
+
+    .empty-state { text-align: center; padding: 2rem 1rem; }
+    .empty-state-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--surface-50); border: 1px dashed var(--surface-300); display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem; color: var(--surface-400); }
+    .empty-state-title { font-size: var(--text-sm); font-weight: 600; color: var(--surface-600); margin-bottom: 0.25rem; }
+    .empty-state-desc { font-size: var(--text-xs); color: var(--surface-400); margin-bottom: 0.75rem; }
+
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-width: 1400px; }
+    .batch-card { border: 2px solid var(--surface-200); border-radius: var(--radius-lg); overflow: hidden; background: white; transition: border-color 0.2s; cursor: pointer; }
+    .batch-card.selected { border-color: var(--accent-500); box-shadow: 0 0 0 3px rgb(45 138 78 / 0.15); }
+    .batch-card canvas { width: 100%; height: auto; display: block; }
+    .batch-card-footer { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-top: 1px solid var(--surface-100); }
+    .batch-card-label { font-size: var(--text-xs); font-weight: 600; color: var(--surface-700); }
+    .batch-card-badge { font-size: 0.625rem; color: var(--surface-400); background: var(--surface-50); padding: 0.125rem 0.5rem; border-radius: 3px; }
+    .flip-btn { font-size: 0.625rem; padding: 0.125rem 0.5rem; border: 1px solid var(--surface-200); border-radius: 3px; background: white; cursor: pointer; font-family: var(--font-sans); color: var(--surface-600); }
+    .flip-btn:hover { background: var(--surface-50); }
+
+    .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--surface-800); color: white; padding: 0.75rem 1.25rem; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; box-shadow: 0 4px 16px rgb(0 0 0 / 0.15); z-index: 100; }
+    .toast-success { background: var(--accent-700); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .data-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+    .data-table th { text-align: left; padding: 0.5rem; color: var(--surface-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--surface-200); }
+    .data-table td { padding: 0.5rem; border-bottom: 1px solid var(--surface-100); }
+
+    .drop-zone {
+      border: 2px dashed var(--surface-200); border-radius: var(--radius-md); padding: 1rem;
+      text-align: center; cursor: pointer; background: var(--surface-25);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .drop-zone:hover { border-color: var(--surface-400); background: var(--surface-50); }
+
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 900px) {
+      .form-grid-2 { grid-template-columns: 1fr; }
+      .form-grid-3 { grid-template-columns: 1fr 1fr !important; }
+    }
+    @media (max-width: 640px) {
+      .card-grid { grid-template-columns: 1fr; }
+      .form-grid-3 { grid-template-columns: 1fr !important; }
+      header { flex-wrap: wrap; gap: 0.5rem; }
+      .header-actions { width: 100%; justify-content: flex-end; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
+    <div style="width: 28px; height: 28px; border-radius: 4px; background: var(--accent-600); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 11px; flex-shrink: 0;">ID</div>
+    <div class="min-w-0">
+      <h1 style="font-size: var(--text-sm); font-weight: 600; margin: 0; color: var(--surface-800);">ID Card Generator</h1>
+      <p style="font-size: 0.6875rem; margin: 0; color: var(--surface-500);">Batch Generation</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2 header-actions">
+    <button type="button" class="btn-secondary" id="batchOpenTemplateBtn" aria-haspopup="dialog">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3 3h10v2H3zM3 7h8v2H3zM3 11h6v2H3z"/></svg>
+      <span class="hidden sm:inline">Templates</span>
+    </button>
+    <a href="index.html" class="btn-ghost" style="text-decoration: none;">← Single card</a>
+  </div>
+</header>
+
+<nav class="bg-white border-b px-4 py-0 flex items-center gap-0 sticky top-[49px] z-[9]" style="border-color: var(--surface-200);">
+  <a href="index.html" class="nav-tab">Single Card</a>
+  <a href="batch.html" class="nav-tab active">Batch Generation</a>
+</nav>
+
+<main style="max-width: 1400px; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: 0;">
+
+  <!-- Step 1: Import Data -->
+  <div class="step-section expanded" data-step="1">
+    <button class="step-header" aria-expanded="true" aria-controls="batchStepBody1">
+      <span class="step-badge">1</span>
+      <span class="step-title-group">
+        <span class="step-title">Import data</span>
+        <span class="step-desc">Upload a CSV file of employees and optionally their photos</span>
+      </span>
+      <svg class="step-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 7l5 5 5-5" stroke-linecap="round"/></svg>
+    </button>
+    <div class="step-body" id="batchStepBody1">
+      <div class="step-body-inner">
+        <div class="form-grid-2">
+          <div>
+            <label class="form-label">CSV file <span class="tooltip-icon" title="Columns: Name, Title, Department, ID, Issue Date, Expiry Date, Photo">?</span></label>
+            <div class="drop-zone" id="csvDropZone">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--surface-400); margin: 0 auto 0.25rem; display: block;" aria-hidden="true"><path d="M3 2v12l5-3 5 3V2a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z"/></svg>
+              <span style="font-size: var(--text-xs); color: var(--surface-500);">Drop CSV or click to import</span>
+              <p style="font-size: var(--text-caption); color: var(--surface-400); margin-top: 0.125rem;">Columns: Name, Title, Department, ID, Issue Date, Expiry Date, Photo</p>
+            </div>
+            <input type="file" id="csvFileInput" accept=".csv" style="display:none;">
+          </div>
+          <div>
+            <label class="form-label">Employee photos <span class="tooltip-icon" title="Match photos by filename with employee names or IDs in the CSV">?</span></label>
+            <div class="drop-zone" id="photosDropZone">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--surface-400); margin: 0 auto 0.25rem; display: block;" aria-hidden="true"><circle cx="6" cy="6" r="2"/><path d="M1 13v-1a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v1"/></svg>
+              <span style="font-size: var(--text-xs); color: var(--surface-500);">Drop photos folder or click to upload</span>
+              <p style="font-size: var(--text-caption); color: var(--surface-400); margin-top: 0.125rem;">Match by filename (PNG, JPG)</p>
+            </div>
+            <input type="file" id="photosFolderInput" accept="image/png,image/jpeg" multiple webkitdirectory style="display:none;">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Organization -->
+  <div class="step-section" data-step="2">
+    <button class="step-header" aria-expanded="false" aria-controls="batchStepBody2">
+      <span class="step-badge">2</span>
+      <span class="step-title-group">
+        <span class="step-title">Organization</span>
+        <span class="step-desc">Company name and logo shared across all cards</span>
+      </span>
+      <svg class="step-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 7l5 5 5-5" stroke-linecap="round"/></svg>
+    </button>
+    <div class="step-body" id="batchStepBody2">
+      <div class="step-body-inner">
+        <div class="form-grid-2">
+          <div>
+            <label class="form-label" for="batchCompanyName">Company name</label>
+            <input id="batchCompanyName" class="form-input" type="text" placeholder="Organization name">
+          </div>
+          <div>
+            <label class="form-label">Logo</label>
+            <div class="drop-zone" id="batchLogoDropZone">
+              <div id="batchLogoDropContent">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--surface-400); margin: 0 auto 0.25rem; display: block;" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                <span style="font-size: var(--text-xs); color: var(--surface-500);">Drop logo or click to upload</span>
+                <p style="font-size: var(--text-caption); color: var(--surface-400); margin-top: 0.125rem;">PNG, JPG, SVG up to 2MB</p>
+              </div>
+              <div id="batchLogoPreviewMini" style="display:none; align-items:center; gap: 0.75rem; justify-content: center;">
+                <img id="batchLogoPreviewMiniImg" alt="Logo preview" style="max-height: 40px; max-width: 120px; object-fit: contain;">
+                <button type="button" class="btn-ghost" id="batchRemoveLogoBtn" style="color: var(--danger-500);">Remove</button>
+              </div>
+              <input type="file" id="batchLogoFileInput" accept="image/png,image/jpeg,image/svg+xml" style="display:none;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Card Background -->
+  <div class="step-section" data-step="3">
+    <button class="step-header" aria-expanded="false" aria-controls="batchStepBody3">
+      <span class="step-badge">3</span>
+      <span class="step-title-group">
+        <span class="step-title">Card background</span>
+        <span class="step-desc">Optional background image for the front of all cards</span>
+      </span>
+      <svg class="step-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 7l5 5 5-5" stroke-linecap="round"/></svg>
+    </button>
+    <div class="step-body" id="batchStepBody3">
+      <div class="step-body-inner">
+        <div class="drop-zone" id="batchBgDropZone">
+          <div id="batchBgDropContent">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--surface-400); margin: 0 auto 0.375rem; display: block;" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            <span style="font-size: var(--text-xs); color: var(--surface-500);">Drop background image or click to upload</span>
+            <p style="font-size: var(--text-caption); color: var(--surface-400); margin-top: 0.125rem;">PNG, JPG up to 5MB</p>
+          </div>
+          <div id="batchBgPreviewMini" style="display:none; align-items:center; gap: 0.75rem; justify-content: center;">
+            <img id="batchBgPreviewMiniImg" alt="Background preview" style="max-height: 40px; max-width: 120px; object-fit: cover; border-radius: 3px;">
+            <button type="button" class="btn-ghost" id="batchRemoveBgBtn" style="color: var(--danger-500);">Remove</button>
+          </div>
+          <input type="file" id="batchBgFileInput" accept="image/png,image/jpeg" style="display:none;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Back of Card -->
+  <div class="step-section" data-step="4">
+    <button class="step-header" aria-expanded="false" aria-controls="batchStepBody4">
+      <span class="step-badge">4</span>
+      <span class="step-title-group">
+        <span class="step-title">Back of card</span>
+        <span class="step-desc">Notice text and optional background for card reverse</span>
+      </span>
+      <svg class="step-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 7l5 5 5-5" stroke-linecap="round"/></svg>
+    </button>
+    <div class="step-body" id="batchStepBody4">
+      <div class="step-body-inner">
+        <div class="form-grid-2">
+          <div>
+            <label class="form-label" for="batchBackNotice">Notice text</label>
+            <div class="rte-wrap">
+              <div class="rte-toolbar">
+                <div class="rte-toolbar-group">
+                  <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                  <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                  <button type="button" class="rte-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+                </div>
+                <div class="rte-toolbar-group">
+                  <select class="rte-fontsize" data-cmd="fontSize" title="Font size">
+                    <option value="1">Small</option>
+                    <option value="3" selected>Normal</option>
+                    <option value="5">Large</option>
+                    <option value="7">XL</option>
+                  </select>
+                </div>
+                <div class="rte-toolbar-group">
+                  <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="4" cy="12" r="1.5"/><rect x="7" y="3" width="7" height="2" rx="0.5"/><rect x="7" y="7" width="7" height="2" rx="0.5"/><rect x="7" y="11" width="7" height="2" rx="0.5"/></svg>
+                  </button>
+                </div>
+                <div class="rte-toolbar-group" style="position:relative;">
+                  <button type="button" class="rte-btn" data-cmd="foreColor" id="batchRteColorBtn" title="Text color">
+                    <span class="rte-color-swatch" id="batchRteColorSwatch"></span>
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4" stroke-linecap="round"/></svg>
+                  </button>
+                  <div class="rte-color-popup" id="batchRteColorPopup" style="display:none;"></div>
+                </div>
+              </div>
+              <div class="rte-editor" id="batchBackNotice" contenteditable="true" data-placeholder="Notice or instructions printed on the back of the card"></div>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Back background</label>
+            <div class="drop-zone" id="batchBackBgDropZone">
+              <div id="batchBackBgDropContent">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--surface-400); margin: 0 auto 0.375rem; display: block;" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                <span style="font-size: var(--text-xs); color: var(--surface-500);">Drop background or click to upload</span>
+                <p style="font-size: var(--text-caption); color: var(--surface-400); margin-top: 0.125rem;">PNG, JPG up to 5MB</p>
+              </div>
+              <div id="batchBackBgPreviewMini" style="display:none; align-items:center; gap: 0.75rem; justify-content: center;">
+                <img id="batchBackBgPreviewMiniImg" alt="Background preview" style="max-height: 40px; max-width: 120px; object-fit: cover; border-radius: 3px;">
+                <button type="button" class="btn-ghost" id="batchRemoveBackBgBtn" style="color: var(--danger-500);">Remove</button>
+              </div>
+              <input type="file" id="batchBackBgFileInput" accept="image/png,image/jpeg" style="display:none;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Template banner + save -->
+  <div class="template-banner" style="margin-top: 0.75rem;">
+    <div style="width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--accent-100); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="var(--accent-600)" stroke-width="1.5" aria-hidden="true"><path d="M3 3h10v2H3zM3 7h8v2H3zM3 11h6v2H3z"/></svg>
+    </div>
+    <div style="flex:1; min-width:0;">
+      <span style="font-weight:600; font-size:var(--text-sm); color:var(--surface-800); display:block;">Use a template</span>
+      <span style="font-size:var(--text-caption); color:var(--surface-500);">Apply branding, backgrounds, and card layout to all cards</span>
+    </div>
+    <button type="button" class="btn-primary" id="batchQuickTplBtn" style="font-size: var(--text-xs); padding: 0.375rem 0.75rem; flex-shrink: 0;">Browse</button>
+    <button type="button" class="btn-secondary" id="batchSaveTplBtn" style="font-size: var(--text-xs); padding: 0.375rem 0.75rem; flex-shrink: 0;">Save</button>
+  </div>
+
+  <!-- Saved employees from database -->
+  <div style="background: white; border: 1px solid var(--surface-200); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-top: 0.75rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+      <span style="font-size: var(--text-xs); font-weight: 600; color: var(--surface-600); text-transform: uppercase; letter-spacing: 0.05em;">Saved employees (database)</span>
+      <span style="font-size: var(--text-caption); color: var(--surface-400);" id="batchDbCount"></span>
+    </div>
+    <div style="display: flex; gap: 0.375rem;">
+      <input id="batchDbSearchInput" class="form-input" type="text" placeholder="Search by name, ID, or department..." style="flex:1; font-size: var(--text-xs); padding: 0.375rem 0.5rem;">
+      <button type="button" class="btn-ghost" id="batchDbSearchBtn" style="font-size: var(--text-xs); padding: 0.375rem 0.75rem;">Find</button>
+      <button type="button" class="btn-ghost" id="batchDbShowAllBtn" style="font-size: var(--text-xs); padding: 0.375rem 0.75rem;">All</button>
+    </div>
+    <div id="batchDbResults" style="max-height: 150px; overflow-y: auto; margin-top: 0.5rem; display: none;"></div>
+  </div>
+
+  <!-- Data section (shown after CSV import) -->
+  <div id="dataSection" style="display:none; margin-top: 0.75rem;">
+    <div style="background: white; border: 1px solid var(--surface-200); border-radius: var(--radius-lg); padding: 1rem 1.25rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+        <span style="font-size: var(--text-xs); font-weight: 600; color: var(--surface-700);">
+          <span id="recordCount">0 records</span>
+        </span>
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" class="btn-ghost" id="viewDataBtn" style="font-size: var(--text-xs);">View data</button>
+          <button type="button" class="btn-ghost" id="batchSaveAllToDbBtn" style="font-size: var(--text-xs); color: var(--accent-500);">Save all to DB</button>
+          <button type="button" class="btn-ghost" id="clearDataBtn" style="font-size: var(--text-xs); color: var(--danger-500);">Clear</button>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--surface-100);">
+        <label style="font-size: var(--text-caption); color: var(--surface-500); white-space: nowrap;">Export format:</label>
+        <select id="exportFormat" class="form-select" style="width: auto; font-size: var(--text-xs); padding: 0.25rem 2rem 0.25rem 0.5rem;">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPEG</option>
+          <option value="pdf">PDF</option>
+        </select>
+        <label style="font-size: var(--text-caption); color: var(--surface-500); margin-left: 0.25rem; white-space: nowrap;">Export side:</label>
+        <select id="exportSide" class="form-select" style="width: auto; font-size: var(--text-xs); padding: 0.25rem 2rem 0.25rem 0.5rem;">
+          <option value="both">Front + Back</option>
+          <option value="front">Front only</option>
+          <option value="back">Back only</option>
+        </select>
+        <button type="button" class="btn-primary" id="generateAllBtn" style="margin-left: auto; font-size: var(--text-xs); padding: 0.375rem 0.75rem;">
+          <span class="spinner"></span>
+          <span class="btn-label">Generate all</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selection toolbar -->
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem;" id="selectionToolbar">
+    <div style="display: flex; gap: 0.5rem;">
+      <button type="button" class="btn-ghost" id="selectAllBtn" style="font-size: var(--text-xs);">Select all</button>
+      <button type="button" class="btn-ghost" id="deselectAllBtn" style="font-size: var(--text-xs);">Deselect</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span style="font-size: var(--text-caption); color: var(--surface-400);" id="selectedCount">0 selected</span>
+      <button type="button" class="btn-secondary" id="exportSelectedBtn" disabled style="font-size: var(--text-xs); padding: 0.375rem 0.75rem;">
+        <span class="spinner"></span>
+        <span class="btn-label" id="exportSelectedLabel">Export selected</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Card grid -->
+  <div id="cardsContainer" class="card-grid" style="margin-top: 0.5rem;"></div>
+
+  <div id="emptyState" class="empty-state" style="display:none;">
+    <div class="empty-state-icon">
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2v12l5-3 5 3V2a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z"/></svg>
+    </div>
+    <p class="empty-state-title">No records yet</p>
+    <p class="empty-state-desc">Import a CSV file with employee data to generate cards in bulk.</p>
+    <div style="margin-top:0.35rem;">
+      <span style="display:inline-block; background:var(--surface-50); border:1px solid var(--surface-200); border-radius:var(--radius-sm); padding:0.25rem 0.5rem; font-size:var(--text-caption); color:var(--surface-500); font-family:monospace;">
+        Name, Title, Department, ID, Issue Date, Expiry Date
+      </span>
+    </div>
+  </div>
+
+</main>
+
+<!-- Data Table Modal -->
+<div id="dataTableOverlay" style="display:none; position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / 0.3); align-items: center; justify-content: center;" onclick="if(event.target===this)closeDataTable()">
+  <div style="background: white; border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgb(0 0 0 / 0.15); max-width: 800px; width: 95%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+    <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--surface-200); display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-weight: 600; font-size: var(--text-sm); color: var(--surface-800);">Imported records</span>
+      <button type="button" class="btn-ghost" onclick="closeDataTable()" style="padding: 0.25rem 0.5rem; font-size: var(--text-xs);">Close</button>
+    </div>
+    <div style="overflow: auto; padding: 0.75rem 1.25rem;">
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>Name</th><th>Title</th><th>Dept</th><th>ID</th><th>Issued</th><th>Expiry</th><th>Photo</th>
+        </tr></thead>
+        <tbody id="dataTableBody"></tbody>
+      </table>
+    </div>
+    <div style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--surface-200); display: flex; justify-content: flex-end;">
+      <button type="button" class="btn-ghost" onclick="closeDataTable()">Close</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="renderCanvas" style="display:none"></canvas>
+<div id="toastContainer" style="position: fixed; bottom: 1rem; right: 1rem; z-index: 200; display: flex; flex-direction: column; gap: 0.5rem;"></div>
+
+<!-- Template Library Modal -->
+<div id="batchTemplateOverlay" style="display:none; position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / 0.4); align-items: center; justify-content: center;">
+  <div style="background: white; border-radius: var(--radius-lg); box-shadow: 0 24px 80px rgb(0 0 0 / 0.18); width: 90%; max-width: 860px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+    <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--surface-200); display: flex; align-items: center; justify-content: space-between;">
+      <div><span style="font-weight: 600; font-size: var(--text-subhead); color: var(--surface-800);">Template library</span></div>
+      <button type="button" id="batchCloseTplLib" class="btn-ghost" style="padding: 0.25rem 0.75rem; font-size: var(--text-xs);">Close</button>
+    </div>
+    <div style="overflow-y: auto; padding: 1.5rem;">
+      <div id="batchTplGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1rem;"></div>
+    </div>
+    <div style="padding: 0.75rem 1.5rem; border-top: 1px solid var(--surface-200); display: flex; justify-content: flex-end; gap: 0.5rem;">
+      <button type="button" class="btn-secondary" id="batchCancelTplBtn" style="font-size: var(--text-xs);">Cancel</button>
+      <button type="button" class="btn-primary" id="batchApplyTplBtn" style="font-size: var(--text-xs);">Apply template</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var $ = function(id) { return document.getElementById(id); };
+
+  var state = {
+    records: [],
+    perPhotoMap: {},
+    selected: {},
+    showingBack: {},
+    accentColor: '#1E6E3A',
+    orientation: 'landscape',
+    brand: {},
+    logoDataUrl: null,
+    bgDataUrl: null,
+    backBgDataUrl: null,
+    generating: false
+  };
+
+  // ── Collapsible step sections ─────────────────────
+  document.querySelectorAll('.step-header').forEach(function(header) {
+    header.addEventListener('click', function() {
+      var section = this.closest('.step-section');
+      var isExpanded = section.classList.contains('expanded');
+      var body = section.querySelector('.step-body');
+
+      if (isExpanded) {
+        body.style.maxHeight = body.scrollHeight + 'px';
+        requestAnimationFrame(function() {
+          body.style.maxHeight = '0px';
+        });
+        section.classList.remove('expanded');
+        this.setAttribute('aria-expanded', 'false');
+      } else {
+        section.classList.add('expanded');
+        this.setAttribute('aria-expanded', 'true');
+        body.style.maxHeight = body.scrollHeight + 'px';
+        body.addEventListener('transitionend', function handler() {
+          body.style.maxHeight = '';
+          body.removeEventListener('transitionend', handler);
+        });
+      }
+    });
+  });
+
+  // Load saved settings from localStorage (written by index.html)
+  try {
+    var saved = JSON.parse(localStorage.getItem('idcard-batch-state') || '{}');
+    state.accentColor = saved.accentColor || '#1E6E3A';
+    state.orientation = saved.orientation || 'landscape';
+    state.brand = {
+      companyDisplay: saved.companyDisplay || '',
+      subtitle: saved.subtitle || '',
+      companyFooter: saved.companyFooter || '',
+      expiryDisplay: saved.expiryDisplay || '',
+      backNotice: saved.backNotice || ''
+    };
+    state.logoDataUrl = saved.logoDataUrl || null;
+    state.bgDataUrl = saved.bgDataUrl || null;
+    state.backBgDataUrl = saved.backBgDataUrl || null;
+  } catch(e) {}
+
+  if (state.brand.companyDisplay) $('batchCompanyName').value = state.brand.companyDisplay;
+  if (state.brand.backNotice) $('batchBackNotice').innerHTML = state.brand.backNotice;
+
+  function saveBrandToStorage() {
+    try {
+      localStorage.setItem('idcard-batch-state', JSON.stringify({
+        accentColor: state.accentColor,
+        orientation: state.orientation,
+        companyDisplay: state.brand.companyDisplay,
+        subtitle: state.brand.subtitle,
+        companyFooter: state.brand.companyFooter,
+        expiryDisplay: state.brand.expiryDisplay,
+        backNotice: state.brand.backNotice,
+        logoDataUrl: state.logoDataUrl,
+        bgDataUrl: state.bgDataUrl,
+        backBgDataUrl: state.backBgDataUrl
+      }));
+    } catch(e) {}
+  }
+
+  $('batchCompanyName').addEventListener('input', function() {
+    state.brand.companyDisplay = this.value;
+    state.brand.companyFooter = this.value.toUpperCase();
+    saveBrandToStorage();
+    if (state.records.length) renderAllCards();
+  });
+
+  // ── Rich text editor for back notice ───────────────
+  $('batchBackNotice').addEventListener('input', function() {
+    state.brand.backNotice = this.innerHTML;
+    saveBrandToStorage();
+    if (state.records.length) renderAllCards();
+  });
+
+  // RTE toolbar for batch page
+  var batchColorPopup = $('batchRteColorPopup');
+  var batchColorSwatch = $('batchRteColorSwatch');
+  var batchCurrentColor = '#000000';
+  if (batchColorSwatch) batchColorSwatch.style.backgroundColor = batchCurrentColor;
+  if (batchColorPopup) {
+    var palette = [
+      '#000000','#252b29','#5a6360','#7a8380','#9fa7a4','#d6dbd9',
+      '#1e6e3a','#2d8a4e','#4ea66a','#0f361b','#18582d','#144723',
+      '#c93535','#d97706','#2563eb','#7c3aed','#db2777','#0891b2',
+      '#e53935','#1e88e5','#43a047','#fb8c00','#8e24aa','#00acc1'
+    ];
+    palette.forEach(function(color) {
+      var chip = document.createElement('div');
+      chip.className = 'rte-color-chip';
+      chip.style.backgroundColor = color;
+      chip.title = color;
+      chip.addEventListener('click', function(e) {
+        e.stopPropagation();
+        batchCurrentColor = color;
+        if (batchColorSwatch) batchColorSwatch.style.backgroundColor = color;
+        document.execCommand('foreColor', false, color);
+        batchColorPopup.style.display = 'none';
+        $('batchBackNotice').focus();
+      });
+      batchColorPopup.appendChild(chip);
+    });
+  }
+  var batchRteColorBtn = $('batchRteColorBtn');
+  if (batchRteColorBtn && batchColorPopup) {
+    batchRteColorBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      batchColorPopup.style.display = batchColorPopup.style.display === 'none' ? 'grid' : 'none';
+    });
+    document.addEventListener('click', function() {
+      batchColorPopup.style.display = 'none';
+    });
+  }
+  document.querySelectorAll('#batchBackNotice').forEach(function() {}); // scope gate
+  (function() {
+    var toolbar = document.querySelector('#batchStepBody4 .rte-toolbar');
+    if (!toolbar) return;
+    toolbar.querySelectorAll('.rte-btn[data-cmd]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var cmd = this.getAttribute('data-cmd');
+        if (cmd === 'foreColor') return;
+        document.execCommand(cmd, false, null);
+        this.classList.toggle('active', document.queryCommandState(cmd));
+        $('batchBackNotice').focus();
+      });
+    });
+    var fs = toolbar.querySelector('.rte-fontsize');
+    if (fs) fs.addEventListener('change', function() { document.execCommand('fontSize', false, this.value); $('batchBackNotice').focus(); });
+  })();
+
+  // ── Logo upload ────────────────────────────────────
+  function showLogoPreview(src) {
+    $('batchLogoDropContent').style.display = 'none';
+    $('batchLogoPreviewMini').style.display = 'flex';
+    $('batchLogoPreviewMiniImg').src = src;
+  }
+  function hideLogoPreview() {
+    state.logoDataUrl = null;
+    state._imgCache = {};
+    $('batchLogoDropContent').style.display = '';
+    $('batchLogoPreviewMini').style.display = 'none';
+    $('batchLogoFileInput').value = '';
+    if (state.records.length) renderAllCards();
+    saveBrandToStorage();
+  }
+  if (state.logoDataUrl) showLogoPreview(state.logoDataUrl);
+
+  $('batchLogoDropZone').addEventListener('click', function(e) { if (e.target !== $('batchRemoveLogoBtn')) $('batchLogoFileInput').click(); });
+  $('batchLogoFileInput').addEventListener('change', function() { if (this.files[0]) processBatchLogoFile(this.files[0]); });
+  $('batchRemoveLogoBtn').addEventListener('click', function(e) { e.stopPropagation(); hideLogoPreview(); });
+  function processBatchLogoFile(file) {
+    if (!file.type.match(/image\/(png|jpeg|svg\+xml)/)) { showToast('Use PNG/JPG/SVG', ''); return; }
+    if (file.size > 2*1024*1024) { showToast('Under 2MB', ''); return; }
+    var r = new FileReader();
+    r.onload = function(e) { state.logoDataUrl = e.target.result; state._imgCache = {}; showLogoPreview(state.logoDataUrl); saveBrandToStorage(); if (state.records.length) renderAllCards(); };
+    r.readAsDataURL(file);
+  }
+
+  // ── Card background upload ─────────────────────────
+  function showBgPreview(src) {
+    $('batchBgDropContent').style.display = 'none';
+    $('batchBgPreviewMini').style.display = 'flex';
+    $('batchBgPreviewMiniImg').src = src;
+  }
+  function hideBgPreview() {
+    state.bgDataUrl = null;
+    state._imgCache = {};
+    $('batchBgDropContent').style.display = '';
+    $('batchBgPreviewMini').style.display = 'none';
+    $('batchBgFileInput').value = '';
+    if (state.records.length) renderAllCards();
+    saveBrandToStorage();
+  }
+  if (state.bgDataUrl) showBgPreview(state.bgDataUrl);
+
+  $('batchBgDropZone').addEventListener('click', function(e) { if (e.target !== $('batchRemoveBgBtn')) $('batchBgFileInput').click(); });
+  $('batchBgFileInput').addEventListener('change', function() { if (this.files[0]) processBatchBgFile(this.files[0]); });
+  $('batchRemoveBgBtn').addEventListener('click', function(e) { e.stopPropagation(); hideBgPreview(); });
+  function processBatchBgFile(file) {
+    if (!file.type.match(/image\/(png|jpeg)/)) { showToast('Use PNG/JPG', ''); return; }
+    if (file.size > 5*1024*1024) { showToast('Under 5MB', ''); return; }
+    var r = new FileReader();
+    r.onload = function(e) { state.bgDataUrl = e.target.result; state._imgCache = {}; showBgPreview(state.bgDataUrl); saveBrandToStorage(); if (state.records.length) renderAllCards(); };
+    r.readAsDataURL(file);
+  }
+
+  // ── Back background upload ─────────────────────────
+  function showBackBgPreview(src) {
+    $('batchBackBgDropContent').style.display = 'none';
+    $('batchBackBgPreviewMini').style.display = 'flex';
+    $('batchBackBgPreviewMiniImg').src = src;
+  }
+  function hideBackBgPreview() {
+    state.backBgDataUrl = null;
+    state._imgCache = {};
+    $('batchBackBgDropContent').style.display = '';
+    $('batchBackBgPreviewMini').style.display = 'none';
+    $('batchBackBgFileInput').value = '';
+    if (state.records.length) renderAllCards();
+    saveBrandToStorage();
+  }
+  if (state.backBgDataUrl) showBackBgPreview(state.backBgDataUrl);
+
+  $('batchBackBgDropZone').addEventListener('click', function(e) { if (e.target !== $('batchRemoveBackBgBtn')) $('batchBackBgFileInput').click(); });
+  $('batchBackBgFileInput').addEventListener('change', function() { if (this.files[0]) processBatchBackBgFile(this.files[0]); });
+  $('batchRemoveBackBgBtn').addEventListener('click', function(e) { e.stopPropagation(); hideBackBgPreview(); });
+  function processBatchBackBgFile(file) {
+    if (!file.type.match(/image\/(png|jpeg)/)) { showToast('Use PNG/JPG', ''); return; }
+    if (file.size > 5*1024*1024) { showToast('Under 5MB', ''); return; }
+    var r = new FileReader();
+    r.onload = function(e) { state.backBgDataUrl = e.target.result; state._imgCache = {}; showBackBgPreview(state.backBgDataUrl); saveBrandToStorage(); if (state.records.length) renderAllCards(); };
+    r.readAsDataURL(file);
+  }
+
+  // ── Toast ──────────────────────────────────────────
+  function showToast(msg, type) {
+    type = type || '';
+    var t = document.createElement('div');
+    t.className = 'toast' + (type ? ' toast-' + type : '');
+    t.textContent = msg;
+    $('toastContainer').appendChild(t);
+    t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; t.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    requestAnimationFrame(function() { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+    setTimeout(function() { t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; setTimeout(function() { t.remove(); }, 200); }, 3000);
+  }
+
+  // ── CSV import ─────────────────────────────────────
+  function showEmptyState() {
+    $('emptyState').style.display = state.records.length ? 'none' : '';
+    $('dataSection').style.display = state.records.length ? '' : 'none';
+    $('selectionToolbar').style.display = state.records.length ? '' : 'none';
+    $('recordCount').textContent = state.records.length + ' records';
+  }
+
+  function parseCSVLine(line) {
+    var result = [], current = '', inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') inQuotes = !inQuotes;
+      else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+      else current += ch;
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  function parseCSV(text) {
+    var lines = text.split(/\r?\n/).filter(function(l) { return l.trim(); });
+    if (lines.length < 2) return [];
+    var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase().replace(/^"|"$/g, ''); });
+    var colMap = {};
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
+      if (h.indexOf('name') !== -1) colMap.name = i;
+      else if (h.indexOf('title') !== -1 || h.indexOf('job') !== -1 || h.indexOf('position') !== -1 || h.indexOf('role') !== -1) colMap.title = i;
+      else if (h.indexOf('dept') !== -1 || h.indexOf('department') !== -1) colMap.dept = i;
+      else if (h.indexOf('id') !== -1 || h.indexOf('employee') !== -1 || h.indexOf('emp') !== -1) colMap.id = i;
+      else if (h.indexOf('issue') !== -1) colMap.issue = i;
+      else if (h.indexOf('expir') !== -1 || h.indexOf('valid') !== -1) colMap.expiry = i;
+      else if (h.indexOf('photo') !== -1 || h.indexOf('image') !== -1 || h.indexOf('pic') !== -1) colMap.photo = i;
+    }
+    var records = [];
+    for (var j = 1; j < lines.length; j++) {
+      var cols = parseCSVLine(lines[j]);
+      if (cols.length < 2) continue;
+      records.push({
+        name: colMap.name != null ? cols[colMap.name] : '',
+        title: colMap.title != null ? cols[colMap.title] : '',
+        dept: colMap.dept != null ? cols[colMap.dept] : '',
+        id: colMap.id != null ? cols[colMap.id] : '',
+        issue: colMap.issue != null ? cols[colMap.issue] : '',
+        expiry: colMap.expiry != null ? cols[colMap.expiry] : '',
+        photo: colMap.photo != null ? cols[colMap.photo] : ''
+      });
+    }
+    return records;
+  }
+
+  $('csvDropZone').addEventListener('click', function() { $('csvFileInput').click(); });
+  $('csvFileInput').addEventListener('change', function() {
+    var file = this.files[0]; if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var records = parseCSV(e.target.result);
+        if (!records.length) { showToast('No records found', ''); return; }
+        state.records = records;
+        state.selected = {};
+        state.showingBack = {};
+        renderAllCards();
+        showEmptyState();
+        showToast(records.length + ' records imported', 'success');
+      } catch(err) { showToast('Could not parse CSV', ''); }
+    };
+    reader.onerror = function() { showToast('Error reading file', ''); };
+    reader.readAsText(file);
+    this.value = '';
+  });
+
+  // ── Photo upload ───────────────────────────────────
+  $('photosDropZone').addEventListener('click', function() { $('photosFolderInput').click(); });
+  $('photosFolderInput').addEventListener('change', function() {
+    var files = this.files;
+    if (!files || !files.length) return;
+    state.perPhotoMap = {};
+    state._imgCache = {};
+    var loaded = 0;
+    var total = files.length;
+    showToast('Loading ' + total + ' photos...', '');
+
+    for (var i = 0; i < files.length; i++) {
+      (function(file) {
+        if (!file.type.match(/image\/(png|jpeg)/)) { loaded++; return; }
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var key = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+          state.perPhotoMap[key] = e.target.result;
+          loaded++;
+          if (loaded >= total) {
+            showToast(loaded + ' photos loaded', 'success');
+            renderAllCards();
+          }
+        };
+        reader.readAsDataURL(file);
+      })(files[i]);
+    }
+    this.value = '';
+  });
+
+  // ── Find employee photo ────────────────────────────
+  function findEmployeePhoto(r) {
+    if (r.photo && /^https?:\/\//.test(r.photo.trim())) return r.photo.trim();
+    // Support in-memory data URLs from DB-loaded records
+    if (r._photoDataUrl) return r._photoDataUrl;
+    var csvKey = r.photo ? r.photo.trim().replace(/\.[^.]+$/, '').toLowerCase() : '';
+    if (csvKey && state.perPhotoMap[csvKey]) return state.perPhotoMap[csvKey];
+    if (r.name) {
+      var n1 = r.name.trim().toLowerCase().replace(/\s+/g, '-');
+      var n2 = r.name.trim().toLowerCase().replace(/\s+/g, '_');
+      if (state.perPhotoMap[n1]) return state.perPhotoMap[n1];
+      if (state.perPhotoMap[n2]) return state.perPhotoMap[n2];
+      if (state.perPhotoMap[r.name.trim().toLowerCase()]) return state.perPhotoMap[r.name.trim().toLowerCase()];
+    }
+    if (r.id && state.perPhotoMap[r.id.toLowerCase()]) return state.perPhotoMap[r.id.toLowerCase()];
+    return null;
+  }
+
+  // ── Card rendering ─────────────────────────────────
+  function getOrCreateImage(src) {
+    state._imgCache = state._imgCache || {};
+    if (!state._imgCache[src]) {
+      var img = new Image();
+      img.src = src;
+      state._imgCache[src] = img;
+    }
+    return state._imgCache[src];
+  }
+
+  function renderFrontCard(r) {
+    var w = 320, h = w / 1.586, p = 12;
+    var canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+
+    if (state.bgDataUrl) {
+      var bg = getOrCreateImage(state.bgDataUrl);
+      try { ctx.drawImage(bg, 0, 0, w, h); } catch(e) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+    } else { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+
+    ctx.fillStyle = state.accentColor; ctx.fillRect(0, 0, w, 4);
+
+    var y = 18, tx = p;
+    if (state.logoDataUrl) {
+      var logo = getOrCreateImage(state.logoDataUrl);
+      try { ctx.drawImage(logo, p, y, 34, 34); tx = p + 42; } catch(e) {}
+    }
+
+    var empPhoto = findEmployeePhoto(r);
+    if (empPhoto) {
+      var ph = getOrCreateImage(empPhoto);
+      try { ctx.drawImage(ph, w - p - 56, y, 56, 60); } catch(e) {}
+    }
+
+    ctx.fillStyle = '#252b29'; ctx.font = '600 12px "DM Sans", system-ui, sans-serif';
+    ctx.fillText(state.brand.companyDisplay, tx, y + 14);
+    ctx.fillStyle = '#7a8380'; ctx.font = '600 8px "DM Sans", system-ui, sans-serif';
+    ctx.fillText(state.brand.subtitle, tx, y + 26);
+
+    y += 40;
+    var labels = ['Name', 'Title', 'Dept', 'ID', 'Issued'];
+    var keys = ['name', 'title', 'dept', 'id', 'issue'];
+    for (var i = 0; i < labels.length; i++) {
+      ctx.fillStyle = '#9fa7a4'; ctx.font = '600 7px "DM Sans", system-ui, sans-serif';
+      ctx.fillText(labels[i], p, y);
+      ctx.fillStyle = '#252b29'; ctx.font = '500 9px "DM Sans", system-ui, sans-serif';
+      ctx.fillText(r[keys[i]] || '\u2014', 52, y);
+      y += 12;
+    }
+
+    ctx.fillStyle = '#9fa7a4'; ctx.font = '500 7px "DM Sans", system-ui, sans-serif';
+    ctx.fillText(state.brand.companyFooter, p, h - 14);
+    var expText = r.expiry ? 'Valid through ' + r.expiry : (state.brand.expiryDisplay || '');
+    ctx.fillText(expText, w - p - ctx.measureText(expText).width, h - 14);
+
+    return canvas;
+  }
+
+  function renderBackCard() {
+    var w = 320, h = w / 1.586;
+    var canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+
+    if (state.backBgDataUrl) {
+      var bg = getOrCreateImage(state.backBgDataUrl);
+      try { ctx.drawImage(bg, 0, 0, w, h); } catch(e) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+    } else { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+
+    ctx.fillStyle = state.accentColor; ctx.fillRect(0, 0, w, 4);
+    ctx.fillStyle = '#252b29'; ctx.font = '600 14px "DM Sans", system-ui, sans-serif';
+    ctx.fillText(state.brand.companyDisplay, w / 2 - ctx.measureText(state.brand.companyDisplay).width / 2, 60);
+    ctx.fillStyle = '#5a6360'; ctx.font = '400 11px "DM Sans", system-ui, sans-serif';
+    var notice = (state.brand.backNotice || '').replace(/<[^>]+>/g, '');
+    var words = notice.split(' ');
+    var line = '', lines = [], maxW = w - 40;
+    for (var i = 0; i < words.length; i++) {
+      var test = line + (line ? ' ' : '') + words[i];
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = words[i]; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    var y2 = 110;
+    for (var j = 0; j < lines.length; j++) { ctx.fillText(lines[j], w / 2 - ctx.measureText(lines[j]).width / 2, y2); y2 += 18; }
+
+    return canvas;
+  }
+
+  function renderAllCards() {
+    var container = $('cardsContainer');
+    container.innerHTML = '';
+    state.records.forEach(function(r, i) {
+      var card = document.createElement('div');
+      card.className = 'batch-card';
+      card.setAttribute('data-index', i);
+      if (state.selected[i]) card.classList.add('selected');
+
+      var frontCanvas = renderFrontCard(r);
+      var backCanvas = renderBackCard();
+      card.appendChild(state.showingBack[i] ? backCanvas : frontCanvas);
+
+      var footer = document.createElement('div');
+      footer.className = 'batch-card-footer';
+      footer.innerHTML = '<span class="batch-card-label">' + (r.name || '#' + (i + 1)) + '</span>' +
+        '<button class="flip-btn" data-action="flip" data-index="' + i + '">' + (state.showingBack[i] ? 'Front' : 'Back') + '</button>' +
+        '<span class="batch-card-badge">' + (r.id || r.dept || '') + '</span>';
+      card.appendChild(footer);
+
+      card.addEventListener('click', function(e) {
+        if (e.target.getAttribute('data-action') === 'flip') {
+          e.stopPropagation();
+          state.showingBack[i] = !state.showingBack[i];
+          renderAllCards();
+          return;
+        }
+        state.selected[i] = !state.selected[i];
+        updateSelection();
+        card.classList.toggle('selected', state.selected[i]);
+      });
+
+      container.appendChild(card);
+    });
+    updateSelection();
+    showEmptyState();
+  }
+
+  function updateSelection() {
+    var count = Object.values(state.selected).filter(Boolean).length;
+    $('selectedCount').textContent = count + ' selected';
+    $('exportSelectedBtn').disabled = count === 0;
+    $('exportSelectedLabel').textContent = count > 0 ? 'Export selected (' + count + ')' : 'Export selected';
+  }
+
+  // ── Select / deselect ──────────────────────────────
+  $('selectAllBtn').addEventListener('click', function() {
+    state.records.forEach(function(_, i) { state.selected[i] = true; });
+    renderAllCards();
+  });
+  $('deselectAllBtn').addEventListener('click', function() {
+    state.selected = {};
+    renderAllCards();
+  });
+
+  // ── Export helper ──────────────────────────────────
+  function startExport(targetRecordIndices, buttonEl) {
+    if (state.generating || !targetRecordIndices.length) return;
+    state.generating = true;
+    buttonEl.classList.add('loading');
+    var format = $('exportFormat').value;
+    var side = $('exportSide').value;
+    var ext = format === 'pdf' ? '.pdf' : (format === 'jpeg' ? '.jpg' : '.png');
+    var mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    var total = targetRecordIndices.length * (side === 'both' ? 2 : 1);
+    var done = 0;
+
+    showToast('Generating ' + total + ' cards...', '');
+
+    function exportNext() {
+      if (done >= total) {
+        state.generating = false;
+        buttonEl.classList.remove('loading');
+        if (format === 'pdf') { finalizePDF(state.pdfPages); }
+        showToast(total + ' cards downloaded', 'success');
+        return;
+      }
+      var idx = targetRecordIndices[Math.floor(done / (side === 'both' ? 2 : 1))];
+      var r = state.records[idx];
+      var isBack = (side === 'back') || (side === 'both' && done % 2 === 1);
+      var suffix = isBack ? '-back' : '-front';
+      downloadCardHQ(r, isBack, function() {
+        var canvas = $('renderCanvas');
+        if (format === 'pdf') {
+          state.pdfPages = state.pdfPages || [];
+          var imgData = canvas.toDataURL('image/jpeg', 0.95);
+          state.pdfPages.push({ dataUrl: imgData, isBack: isBack, name: r.name || '', idx: idx });
+        }
+        canvas.toBlob(function(blob) {
+          if (format === 'pdf') return done++, setTimeout(exportNext, 50);
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a'); a.href = url;
+          a.download = (r.name || 'card').replace(/\s+/g, '-').toLowerCase() + '-' + (idx + 1) + suffix + ext;
+          a.click(); URL.revokeObjectURL(url);
+          done++;
+          setTimeout(exportNext, 50);
+        }, mime, 0.95);
+      });
+    }
+    state.pdfPages = [];
+    exportNext();
+  }
+
+  // ── Generate all — ALWAYS all records ───────────
+  $('generateAllBtn').addEventListener('click', function() {
+    var targetIndices = state.records.map(function(_, i) { return i; });
+    startExport(targetIndices, this);
+  });
+
+  // ── Export selected ─────────────────────────────
+  $('exportSelectedBtn').addEventListener('click', function() {
+    var selected = Object.keys(state.selected).filter(function(k) { return state.selected[k]; }).map(Number);
+    if (!selected.length) return;
+    startExport(selected, this);
+  });
+
+  // ── HQ card render ─────────────────────────────────
+  function downloadCardHQ(r, isBack, callback) {
+    var cardW = 1011, cardH = 638;
+    var canvas = $('renderCanvas');
+    canvas.width = cardW; canvas.height = cardH;
+    var ctx = canvas.getContext('2d');
+
+    function doDraw() {
+      if (isBack) {
+        if (state.backBgDataUrl) {
+          var bg2 = new Image();
+          var backBgDone = false;
+          bg2.onload = function() { if (!backBgDone) { backBgDone = true; ctx.drawImage(bg2, 0, 0, cardW, cardH); drawBackContent(); callback(); } };
+          bg2.src = state.backBgDataUrl;
+          if (bg2.complete) bg2.onload();
+        }
+        else { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cardW, cardH); drawBackContent(); callback(); }
+      } else {
+        if (state.bgDataUrl) {
+          var bg1 = new Image();
+          var frontBgDone = false;
+          bg1.onload = function() { if (!frontBgDone) { frontBgDone = true; ctx.drawImage(bg1, 0, 0, cardW, cardH); drawFrontContent(); callback(); } };
+          bg1.src = state.bgDataUrl;
+          if (bg1.complete) bg1.onload();
+        } else { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cardW, cardH); drawFrontContent(); callback(); }
+      }
+    }
+
+    function drawBackContent() {
+      ctx.fillStyle = state.accentColor; ctx.fillRect(0, 0, cardW, 10);
+      ctx.fillStyle = '#252b29'; ctx.font = '600 36px "DM Sans", system-ui, sans-serif';
+      ctx.fillText(state.brand.companyDisplay, cardW / 2 - ctx.measureText(state.brand.companyDisplay).width / 2, 160);
+      ctx.fillStyle = '#5a6360'; ctx.font = '400 26px "DM Sans", system-ui, sans-serif';
+      var notice = (state.brand.backNotice || '').replace(/<[^>]+>/g, '');
+      var words = notice.split(' ');
+      var line = '', lines = [], maxW = cardW - 120;
+      var line = '', lines = [], maxW = cardW - 120;
+      for (var w = 0; w < words.length; w++) { var t = line + (line ? ' ' : '') + words[w]; if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = words[w]; } else line = t; }
+      if (line) lines.push(line);
+      var yb = 260; for (var l = 0; l < lines.length; l++) { ctx.fillText(lines[l], cardW / 2 - ctx.measureText(lines[l]).width / 2, yb); yb += 38; }
+    }
+
+    function drawFrontContent() {
+      ctx.fillStyle = state.accentColor; ctx.fillRect(0, 0, cardW, 10);
+      var pad = 36, y = 28, tx = pad;
+      if (state.logoDataUrl) { try { var lImg = new Image(); lImg.src = state.logoDataUrl; ctx.drawImage(lImg, pad, y, 142, 142); tx = pad + 162; } catch(e) {} }
+      var empP = findEmployeePhoto(r);
+      if (empP) { try { var pImg = new Image(); pImg.src = empP; ctx.drawImage(pImg, cardW - pad - 236, y, 236, 260); } catch(e) {} }
+      ctx.fillStyle = '#252b29'; ctx.font = '600 36px "DM Sans", system-ui, sans-serif'; ctx.fillText(state.brand.companyDisplay, tx, y + 44);
+      ctx.fillStyle = '#7a8380'; ctx.font = '600 24px "DM Sans", system-ui, sans-serif'; ctx.fillText(state.brand.subtitle, tx, y + 76);
+      var hb = empP ? y + 260 : (state.logoDataUrl ? y + 142 : y + 100); y = hb + 10;
+      var fls = [{ l: 'Name', f: 'name' }, { l: 'Title', f: 'title' }, { l: 'Dept', f: 'dept' }, { l: 'ID', f: 'id' }, { l: 'Issued', f: 'issue' }];
+      var fz = cardH - pad - 30;
+      fls.forEach(function(f) {
+        if (y + 20 > fz - 40) return;
+        ctx.fillStyle = '#9fa7a4'; ctx.font = '600 22px "DM Sans", system-ui, sans-serif'; ctx.fillText(f.l, pad, y);
+        ctx.fillStyle = '#252b29'; ctx.font = '500 30px "DM Sans", system-ui, sans-serif'; ctx.fillText(r[f.f] || '\u2014', pad + 200, y); y += 42;
+      });
+      ctx.fillStyle = '#9fa7a4'; ctx.font = '500 22px "DM Sans", system-ui, sans-serif'; ctx.fillText(state.brand.companyFooter, pad, fz);
+      var et = r.expiry ? 'Valid through ' + r.expiry : (state.brand.expiryDisplay || ''); ctx.fillText(et, cardW - pad - ctx.measureText(et).width, fz);
+    }
+
+    doDraw();
+  }
+
+  // ── PDF finalization ───────────────────────────────
+  function finalizePDF(pages) {
+    var pdfW = 85.6, pdfH = 54;
+    var doc = new jspdf.jsPDF({ unit: 'mm', format: [pdfW, pdfH], orientation: 'landscape' });
+
+    var loaded = 0;
+    function addNext() {
+      if (loaded >= pages.length) {
+        doc.save('batch-cards.pdf');
+        return;
+      }
+      var page = pages[loaded];
+      var img = new Image();
+      img.onload = function() {
+        if (loaded > 0) doc.addPage();
+        doc.addImage(img, 'JPEG', 0, 0, pdfW, pdfH);
+        loaded++;
+        addNext();
+      };
+      img.src = page.dataUrl;
+    }
+    addNext();
+  }
+
+  // ── Data table modal ───────────────────────────────
+  function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  $('viewDataBtn').addEventListener('click', function() {
+    var tbody = $('dataTableBody');
+    tbody.innerHTML = '';
+    state.records.forEach(function(r, i) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td style="color:var(--surface-400)">' + (i + 1) + '</td>' +
+        '<td style="font-weight:500">' + escapeHtml(r.name) + '</td>' +
+        '<td>' + escapeHtml(r.title) + '</td>' +
+        '<td>' + escapeHtml(r.dept) + '</td>' +
+        '<td style="font-family:monospace;font-size:11px">' + escapeHtml(r.id) + '</td>' +
+        '<td>' + escapeHtml(r.issue || '') + '</td>' +
+        '<td>' + escapeHtml(r.expiry || '') + '</td>' +
+        '<td style="font-size:11px">' + (r.photo ? 'Yes' : 'No') + '</td>';
+      tbody.appendChild(tr);
+    });
+    $('dataTableOverlay').style.display = 'flex';
+  });
+
+  window.closeDataTable = function() { $('dataTableOverlay').style.display = 'none'; };
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && $('dataTableOverlay').style.display === 'flex') closeDataTable(); });
+
+  // ── Clear ──────────────────────────────────────────
+  $('clearDataBtn').addEventListener('click', function() {
+    state.records = [];
+    state.selected = {};
+    state.showingBack = {};
+    state.perPhotoMap = {};
+    $('cardsContainer').innerHTML = '';
+    showEmptyState();
+    showToast('Data cleared', '');
+  });
+
+  // Save all to DB
+  $('batchSaveAllToDbBtn').addEventListener('click', function() {
+    if (!state.records.length) { showToast('No records to save', ''); return; }
+    var saved = 0;
+    function saveNext(i) {
+      if (i >= state.records.length) {
+        showToast(saved + ' records saved to database', 'success');
+        batchUpdateDbCount();
+        return;
+      }
+      var r = state.records[i];
+      var record = {
+        name: r.name || '',
+        jobTitle: r.title || '',
+        department: r.dept || '',
+        empId: r.id || '',
+        issueDate: r.issue || '',
+        expiryDate: r.expiry || '',
+        companyName: state.brand.companyDisplay || '',
+        companyDisplay: state.brand.companyDisplay || '',
+        subtitle: state.brand.subtitle || '',
+        companyFooter: state.brand.companyFooter || '',
+        expiryDisplay: state.brand.expiryDisplay || '',
+        backNotice: state.brand.backNotice || '',
+        accentColor: state.accentColor,
+        orientation: state.orientation,
+        photoDataUrl: findEmployeePhoto(r) || '',
+        logoDataUrl: state.logoDataUrl || '',
+        bgDataUrl: state.bgDataUrl || '',
+        backBgDataUrl: state.backBgDataUrl || ''
+      };
+      EmployeeDB.save(record).then(function() { saved++; saveNext(i + 1); })
+        .catch(function() { saved++; saveNext(i + 1); });
+    }
+    saveNext(0);
+  });
+
+  // ── Template library ───────────────────────────────
+  var batchTplOverlay = $('batchTemplateOverlay');
+  var batchTplGrid = $('batchTplGrid');
+  var batchSelectedTplId = '';
+  var batchCustomTemplates = [];
+  try { batchCustomTemplates = JSON.parse(localStorage.getItem('idcard-custom-templates')||'[]'); } catch(e) {}
+
+  function batchRenderTemplateCard(tpl) {
+    var w=320, h=w/1.586, p=12;
+    var canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+    var ctx=canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    if (tpl.bg) {
+      var bg = document.createElement('img');
+      bg.src = tpl.bg;
+      if (bg.complete) { try { ctx.drawImage(bg, 0, 0, w, h); } catch(e) {} }
+      else bg.onload = function() { ctx.drawImage(bg, 0, 0, w, h); };
+    }
+    ctx.fillStyle = tpl.accent; ctx.fillRect(0, 0, w, 4);
+    var y=16, tx=p;
+    ctx.fillStyle='#252b29'; ctx.font='600 11px "DM Sans",system-ui,sans-serif';
+    ctx.fillText(tpl.data.companyDisplay||'', tx, y+12);
+    ctx.fillStyle='#7a8380'; ctx.font='600 8px "DM Sans",system-ui,sans-serif';
+    ctx.fillText(tpl.data.subtitle||'', tx, y+24);
+    y+=38;
+    var labels=['Name','Title','Dept','ID','Issued'];
+    var keys=['fullName','jobTitle','department','empId','issueDate'];
+    for (var i=0;i<labels.length;i++) {
+      ctx.fillStyle='#9fa7a4'; ctx.font='600 7px "DM Sans",system-ui,sans-serif';
+      ctx.fillText(labels[i],p,y);
+      ctx.fillStyle='#252b29'; ctx.font='500 9px "DM Sans",system-ui,sans-serif';
+      ctx.fillText(tpl.data[keys[i]]||'\u2014',52,y);
+      y+=12;
+    }
+    ctx.fillStyle='#9fa7a4'; ctx.font='500 7px "DM Sans",system-ui,sans-serif';
+    ctx.fillText(tpl.data.companyFooter||'',p,y);
+    ctx.fillText(tpl.data.expiryDisplay||'',w-p-ctx.measureText(tpl.data.expiryDisplay||'').width,y);
+    return canvas;
+  }
+
+  function batchOpenTplLib() {
+    batchCustomTemplates = JSON.parse(localStorage.getItem('idcard-custom-templates')||'[]');
+    batchTplGrid.innerHTML = '';
+    if (!batchCustomTemplates.length) {
+      batchTplGrid.innerHTML = '<p style="text-align:center;color:var(--surface-400);font-size:var(--text-sm);padding:2rem;">No templates yet. Create one from the Single Card page with "Save as template".</p>';
+    }
+    batchCustomTemplates.forEach(function(tpl) {
+      var card = document.createElement('div');
+      card.className = 'selectable-card';
+      card.setAttribute('data-tpl-id', tpl.id);
+      card.style.position = 'relative';
+      var cvs = batchRenderTemplateCard(tpl);
+      cvs.style.cssText = 'width:100%;height:auto;display:block;cursor:pointer;';
+      card.appendChild(cvs);
+
+      var footer = document.createElement('div');
+      footer.style.cssText = 'padding:0.5rem 0.75rem;border-top:1px solid var(--surface-100);display:flex;align-items:center;justify-content:space-between;gap:0.5rem;';
+      var info = document.createElement('div');
+      info.innerHTML = '<span style="font-size:var(--text-xs);font-weight:600;color:var(--surface-700);display:block;">'+tpl.name+'</span><span style="font-size:var(--text-caption);color:var(--surface-400);">'+tpl.subtitle+'</span>';
+      footer.appendChild(info);
+      card.appendChild(footer);
+
+      card.addEventListener('click', function(e) {
+        document.querySelectorAll('#batchTplGrid .selectable-card').forEach(function(c) { c.classList.remove('selected'); });
+        card.classList.add('selected');
+        batchSelectedTplId = tpl.id;
+        $('batchApplyTplBtn').disabled = false;
+      });
+      batchTplGrid.appendChild(card);
+    });
+    batchTplOverlay.style.display = 'flex'; document.body.style.overflow = 'hidden';
+  }
+
+  function batchCloseTplLib() { batchTplOverlay.style.display = 'none'; document.body.style.overflow = ''; }
+
+  // Template buttons
+  $('batchOpenTemplateBtn').addEventListener('click', batchOpenTplLib);
+  $('batchQuickTplBtn').addEventListener('click', batchOpenTplLib);
+  $('batchCloseTplLib').addEventListener('click', batchCloseTplLib);
+  $('batchCancelTplBtn').addEventListener('click', batchCloseTplLib);
+  batchTplOverlay.addEventListener('click', function(e) { if(e.target===batchTplOverlay) batchCloseTplLib(); });
+  document.addEventListener('keydown', function(e) { if(e.key==='Escape'&&batchTplOverlay.style.display==='flex') batchCloseTplLib(); });
+
+  $('batchApplyTplBtn').addEventListener('click', function() {
+    var tpl = batchCustomTemplates.find(function(t) { return t.id === batchSelectedTplId; });
+    if (!tpl) return;
+
+    // Apply brand settings
+    state.accentColor = tpl.accent || '#1E6E3A';
+    state.orientation = tpl.orientation || 'landscape';
+    state.brand.companyDisplay = tpl.data.companyDisplay || '';
+    state.brand.companyFooter = (tpl.data.companyDisplay||'').toUpperCase();
+    state.brand.subtitle = tpl.data.subtitle || '';
+    state.brand.expiryDisplay = tpl.data.expiryDisplay || '';
+    state.brand.backNotice = tpl.data.backNotice || '';
+
+    // Apply logo
+    state.logoDataUrl = null;
+    if (tpl.data.logoDataUrl) state.logoDataUrl = tpl.data.logoDataUrl;
+
+    // Apply backgrounds
+    state.bgDataUrl = tpl.bg || null;
+    state.backBgDataUrl = tpl.backBgDataUrl || null;
+
+    // Update inputs and previews
+    $('batchCompanyName').value = state.brand.companyDisplay;
+    $('batchBackNotice').innerHTML = state.brand.backNotice;
+    if (state.logoDataUrl) showLogoPreview(state.logoDataUrl); else hideLogoPreview();
+    if (state.bgDataUrl) showBgPreview(state.bgDataUrl); else hideBgPreview();
+    if (state.backBgDataUrl) showBackBgPreview(state.backBgDataUrl); else hideBackBgPreview();
+
+    saveBrandToStorage();
+    if (state.records.length) renderAllCards();
+    batchCloseTplLib();
+    showToast('Applied ' + tpl.name, 'success');
+  });
+
+  // Save as template button
+  $('batchSaveTplBtn').addEventListener('click', function() {
+    var name = prompt('Template name:', state.brand.companyDisplay || 'Batch Template');
+    if (!name) return;
+    var tpl = {
+      id: 'custom-' + Date.now(),
+      name: name,
+      subtitle: 'Batch template',
+      orientation: state.orientation,
+      accent: state.accentColor,
+      bg: state.bgDataUrl,
+      backBgDataUrl: state.backBgDataUrl,
+      data: {
+        companyDisplay: state.brand.companyDisplay,
+        subtitle: state.brand.subtitle,
+        companyFooter: state.brand.companyFooter,
+        expiryDisplay: state.brand.expiryDisplay,
+        backNotice: state.brand.backNotice,
+        fullName: '',
+        jobTitle: '',
+        department: '',
+        empId: '',
+        issueDate: ''
+      }
+    };
+    var existing = batchCustomTemplates.find(function(t) { return t.name === name; });
+    if (existing) { Object.assign(existing, tpl); }
+    else { batchCustomTemplates.unshift(tpl); if (batchCustomTemplates.length > 20) batchCustomTemplates.pop(); }
+    try { localStorage.setItem('idcard-custom-templates', JSON.stringify(batchCustomTemplates)); } catch(e) {}
+    showToast('Saved as template', 'success');
+  });
+
+  // ── Database search for batch ────────────────────
+  var batchDbResultsVisible = false;
+
+  function batchUpdateDbCount() {
+    EmployeeDB.getCount().then(function(n) {
+      var el = $('batchDbCount');
+      if (el) el.textContent = n + ' records';
+    });
+  }
+
+  function batchDbSearch(query) {
+    EmployeeDB.search(query).then(function(results) {
+      var container = $('batchDbResults');
+      if (!container) return;
+      if (!results.length) {
+        container.style.display = 'block';
+        container.innerHTML = '<div style="text-align:center;padding:0.75rem;font-size:var(--text-caption);color:var(--surface-400);">No employees found</div>';
+        return;
+      }
+      container.style.display = 'block';
+      var html = '';
+      results.forEach(function(r) {
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0.375rem;border-bottom:1px solid var(--surface-100);gap:0.5rem;">';
+        html += '<div style="min-width:0;flex:1;cursor:pointer;" class="batch-db-add" data-id="'+r.id+'">';
+        html += '<span style="font-size:var(--text-xs);font-weight:600;color:var(--surface-800);display:block;">'+escapeHtml(r.name||'')+'</span>';
+        html += '<span style="font-size:var(--text-caption);color:var(--surface-400);">'+escapeHtml(r.empId||'') + (r.department ? ' · ' + escapeHtml(r.department) : '') + '</span>';
+        html += '</div>';
+        html += '<button class="btn-ghost batch-db-del" data-id="'+r.id+'" style="font-size:10px;color:var(--danger-500);padding:0.125rem 0.375rem;flex-shrink:0;">✕</button>';
+        html += '</div>';
+      });
+      container.innerHTML = html;
+
+      container.querySelectorAll('.batch-db-add').forEach(function(row) {
+        row.addEventListener('click', function() {
+          var id = parseInt(this.getAttribute('data-id'));
+          EmployeeDB.get(id).then(function(r) {
+            if (!r) return;
+            state.records.push({
+              name: r.name || '',
+              title: r.jobTitle || '',
+              dept: r.department || '',
+              id: r.empId || '',
+              issue: r.issueDate || '',
+              expiry: r.expiryDate || '',
+              photo: '',
+              _photoDataUrl: r.photoDataUrl || ''
+            });
+            renderAllCards();
+            showEmptyState();
+            showToast('Added: ' + r.name, 'success');
+          });
+        });
+      });
+
+      container.querySelectorAll('.batch-db-del').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var id = parseInt(this.getAttribute('data-id'));
+          if (confirm('Delete this record?')) {
+            EmployeeDB.remove(id).then(function() { showToast('Deleted',''); batchDbSearch(''); batchUpdateDbCount(); });
+          }
+        });
+      });
+    });
+  }
+
+  $('batchDbSearchBtn').addEventListener('click', function() { batchDbResultsVisible = true; batchDbSearch($('batchDbSearchInput').value); });
+  $('batchDbShowAllBtn').addEventListener('click', function() {
+    batchDbResultsVisible = !batchDbResultsVisible;
+    if (batchDbResultsVisible) { batchDbSearch(''); this.textContent = 'Hide'; }
+    else { $('batchDbResults').style.display = 'none'; this.textContent = 'All'; }
+  });
+  $('batchDbSearchInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') batchDbSearch(this.value); });
+  batchUpdateDbCount();
+
+  // ── Init ───────────────────────────────────────────
+  showEmptyState();
+
+  // Auto-populate from localStorage on load
+  if (state.logoDataUrl) showLogoPreview(state.logoDataUrl);
+  if (state.bgDataUrl) showBgPreview(state.bgDataUrl);
+  if (state.backBgDataUrl) showBackBgPreview(state.backBgDataUrl);
+
+})();
+</script>
+</body>
+</html>
