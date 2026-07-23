@@ -244,7 +244,7 @@
     var existing = customTemplates.find(function(t) { return t.bg === bgDataUrl && !t.name.match(/^Custom \d+$/); });
     if (existing) { Object.assign(existing, tpl); }
     else { customTemplates.unshift(tpl); if (customTemplates.length > 20) customTemplates.pop(); }
-    try { localStorage.setItem('idcard-custom-templates', JSON.stringify(customTemplates)); } catch(e) {}
+    Store.saveTemplate(tpl).catch(function() {});
     showToast('Saved as template','success');
   }
 
@@ -841,7 +841,9 @@
 
   var TEMPLATES = [];
   var customTemplates = [];
-  try { customTemplates = JSON.parse(localStorage.getItem('idcard-custom-templates')||'[]'); } catch(e) {}
+
+  // Load templates from server on startup
+  Store.getTemplates().then(function(data) { customTemplates = data; });
 
   function renderTemplateCard(tpl) {
     var w=320, h=w/1.586, p=12;
@@ -921,7 +923,7 @@
         e.stopPropagation();
         if (confirm('Delete template "'+tpl.name+'"? This cannot be undone.')) {
           customTemplates = customTemplates.filter(function(t) { return t.id !== tpl.id; });
-          try { localStorage.setItem('idcard-custom-templates', JSON.stringify(customTemplates)); } catch(e) {}
+          Store.deleteTemplate(tpl.id).catch(function() {});
           if (selectedTplId === tpl.id) selectedTplId = (customTemplates[0] || {}).id || 'standard';
           openTplLib();
           showToast('Template deleted','');
@@ -978,15 +980,15 @@
         bgDataUrl: state.bgDataUrl || '',
         backBgDataUrl: state.backBgDataUrl || ''
       };
-      EmployeeDB.save(record).then(function() {
+      Store.saveEmployee(record).then(function() {
         showToast('Saved to database', 'success');
         updateDbCount();
-      }).catch(function(e) { showToast('Save failed: ' + e, ''); });
+      }).catch(function(e) { showToast('Save failed', ''); });
     });
   }
 
   function updateDbCount() {
-    EmployeeDB.getCount().then(function(n) {
+    Store.getEmployeeCount().then(function(n) {
       var el = $('dbRecordCount');
       if (el) el.textContent = n + ' records';
       if (n === 0) { $('dbResults').style.display = 'none'; }
@@ -997,7 +999,7 @@
   }
 
   function doDbSearch(query) {
-    EmployeeDB.search(query).then(function(results) {
+    Store.getEmployees(query).then(function(results) {
       renderDbResults(results);
     });
   }
@@ -1037,14 +1039,14 @@
         e.stopPropagation();
         var id = parseInt(this.getAttribute('data-id'));
         if (confirm('Delete this record?')) {
-          EmployeeDB.remove(id).then(function() { showToast('Deleted',''); updateDbCount(); });
+          Store.deleteEmployee(id).then(function() { showToast('Deleted',''); updateDbCount(); });
         }
       });
     });
   }
 
   function loadEmployeeFromDb(id) {
-    EmployeeDB.get(id).then(function(r) {
+    Store.getEmployee(id).then(function(r) {
       if (!r) return;
       $('fullName').value = r.name || '';
       $('jobTitle').value = r.jobTitle || '';

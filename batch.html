@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="db.js"></script>
+  <script src="store.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 
@@ -1325,7 +1326,7 @@
         bgDataUrl: state.bgDataUrl || '',
         backBgDataUrl: state.backBgDataUrl || ''
       };
-      EmployeeDB.save(record).then(function() { saved++; saveNext(i + 1); })
+      Store.saveEmployee(record).then(function() { saved++; saveNext(i + 1); })
         .catch(function() { saved++; saveNext(i + 1); });
     }
     saveNext(0);
@@ -1336,7 +1337,7 @@
   var batchTplGrid = $('batchTplGrid');
   var batchSelectedTplId = '';
   var batchCustomTemplates = [];
-  try { batchCustomTemplates = JSON.parse(localStorage.getItem('idcard-custom-templates')||'[]'); } catch(e) {}
+  Store.getTemplates().then(function(data) { batchCustomTemplates = data; });
 
   function batchRenderTemplateCard(tpl) {
     var w=320, h=w/1.586, p=12;
@@ -1373,7 +1374,8 @@
   }
 
   function batchOpenTplLib() {
-    batchCustomTemplates = JSON.parse(localStorage.getItem('idcard-custom-templates')||'[]');
+    Store.getTemplates().then(function(data) {
+      batchCustomTemplates = data;
     batchTplGrid.innerHTML = '';
     if (!batchCustomTemplates.length) {
       batchTplGrid.innerHTML = '<p style="text-align:center;color:var(--surface-400);font-size:var(--text-sm);padding:2rem;">No templates yet. Create one from the Single Card page with "Save as template".</p>';
@@ -1403,6 +1405,7 @@
       batchTplGrid.appendChild(card);
     });
     batchTplOverlay.style.display = 'flex'; document.body.style.overflow = 'hidden';
+    });
   }
 
   function batchCloseTplLib() { batchTplOverlay.style.display = 'none'; document.body.style.overflow = ''; }
@@ -1477,7 +1480,7 @@
     var existing = batchCustomTemplates.find(function(t) { return t.name === name; });
     if (existing) { Object.assign(existing, tpl); }
     else { batchCustomTemplates.unshift(tpl); if (batchCustomTemplates.length > 20) batchCustomTemplates.pop(); }
-    try { localStorage.setItem('idcard-custom-templates', JSON.stringify(batchCustomTemplates)); } catch(e) {}
+    Store.saveTemplate(tpl).catch(function() {});
     showToast('Saved as template', 'success');
   });
 
@@ -1485,14 +1488,14 @@
   var batchDbResultsVisible = false;
 
   function batchUpdateDbCount() {
-    EmployeeDB.getCount().then(function(n) {
+    Store.getEmployeeCount().then(function(n) {
       var el = $('batchDbCount');
       if (el) el.textContent = n + ' records';
     });
   }
 
   function batchDbSearch(query) {
-    EmployeeDB.search(query).then(function(results) {
+    Store.getEmployees(query).then(function(results) {
       var container = $('batchDbResults');
       if (!container) return;
       if (!results.length) {
@@ -1516,7 +1519,7 @@
       container.querySelectorAll('.batch-db-add').forEach(function(row) {
         row.addEventListener('click', function() {
           var id = parseInt(this.getAttribute('data-id'));
-          EmployeeDB.get(id).then(function(r) {
+          Store.getEmployee(id).then(function(r) {
             if (!r) return;
             state.records.push({
               name: r.name || '',
@@ -1540,7 +1543,7 @@
           e.stopPropagation();
           var id = parseInt(this.getAttribute('data-id'));
           if (confirm('Delete this record?')) {
-            EmployeeDB.remove(id).then(function() { showToast('Deleted',''); batchDbSearch(''); batchUpdateDbCount(); });
+            Store.deleteEmployee(id).then(function() { showToast('Deleted',''); batchDbSearch(''); batchUpdateDbCount(); });
           }
         });
       });
