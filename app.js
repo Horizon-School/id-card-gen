@@ -382,6 +382,13 @@
   }
 
   // Sync rich text from contenteditable to preview and keep button states
+  $('backNotice').addEventListener('paste', function(e) {
+    e.preventDefault();
+    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+    this.dispatchEvent(new Event('input'));
+  });
+
   $('backNotice').addEventListener('input', function() {
     var html = this.innerHTML;
     var previewEl = document.querySelector('[data-field="backNotice"]');

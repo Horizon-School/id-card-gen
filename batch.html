@@ -670,6 +670,13 @@
   });
 
   // ── Rich text editor for back notice ───────────────
+  $('batchBackNotice').addEventListener('paste', function(e) {
+    e.preventDefault();
+    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+    this.dispatchEvent(new Event('input'));
+  });
+
   $('batchBackNotice').addEventListener('input', function() {
     state.brand.backNotice = this.innerHTML;
     saveBrandToStorage();
