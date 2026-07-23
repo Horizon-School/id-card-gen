@@ -672,8 +672,19 @@
   // ── Rich text editor for back notice ───────────────
   $('batchBackNotice').addEventListener('paste', function(e) {
     e.preventDefault();
-    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-    document.execCommand('insertText', false, text);
+    var text = (e.clipboardData || window.clipboardData).getData('text/html');
+    if (!text) text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    var div = document.createElement('div');
+    div.innerHTML = text;
+    div.querySelectorAll('[style*="color"], [style*="Color"], font[color]').forEach(function(el) {
+      el.style.color = '#000000';
+      el.removeAttribute('color');
+    });
+    div.querySelectorAll('font[color]').forEach(function(el) {
+      el.style.color = '#000000';
+      el.removeAttribute('color');
+    });
+    document.execCommand('insertHTML', false, div.innerHTML);
     this.dispatchEvent(new Event('input'));
   });
 

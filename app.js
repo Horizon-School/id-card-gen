@@ -384,8 +384,21 @@
   // Sync rich text from contenteditable to preview and keep button states
   $('backNotice').addEventListener('paste', function(e) {
     e.preventDefault();
-    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-    document.execCommand('insertText', false, text);
+    var text = (e.clipboardData || window.clipboardData).getData('text/html');
+    if (!text) text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    // Strip any color styling from pasted content and force black
+    var div = document.createElement('div');
+    div.innerHTML = text;
+    div.querySelectorAll('[style*="color"], [style*="Color"], font[color]').forEach(function(el) {
+      el.style.color = '#000000';
+      el.removeAttribute('color');
+    });
+    // Also handle <font color="..."> tags
+    div.querySelectorAll('font[color]').forEach(function(el) {
+      el.style.color = '#000000';
+      el.removeAttribute('color');
+    });
+    document.execCommand('insertHTML', false, div.innerHTML);
     this.dispatchEvent(new Event('input'));
   });
 
