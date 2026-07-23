@@ -1381,6 +1381,14 @@
     }
     ctx.fillStyle = tpl.accent; ctx.fillRect(0, 0, w, 4);
     var y=16, tx=p;
+    // Draw logo if template has one
+    if (tpl.logoDataUrl) {
+      var tplLogo = document.createElement('img');
+      tplLogo.src = tpl.logoDataUrl;
+      if (tplLogo.complete) { try { ctx.drawImage(tplLogo, p, y, 34, 34); } catch(e) {} }
+      else tplLogo.onload = function() { ctx.drawImage(tplLogo, p, y, 34, 34); };
+      tx = p + 42;
+    }
     ctx.fillStyle='#252b29'; ctx.font='600 11px "DM Sans",system-ui,sans-serif';
     ctx.fillText(tpl.data.companyDisplay||'', tx, y+12);
     ctx.fillStyle='#7a8380'; ctx.font='600 8px "DM Sans",system-ui,sans-serif';
@@ -1459,9 +1467,8 @@
     state.brand.expiryDisplay = tpl.data.expiryDisplay || '';
     state.brand.backNotice = tpl.data.backNotice || '';
 
-    // Apply logo
-    state.logoDataUrl = null;
-    if (tpl.data.logoDataUrl) state.logoDataUrl = tpl.data.logoDataUrl;
+    // Apply logo - check both top-level and data
+    state.logoDataUrl = tpl.logoDataUrl || tpl.data.logoDataUrl || null;
 
     // Apply backgrounds
     state.bgDataUrl = tpl.bg || null;
@@ -1491,6 +1498,7 @@
       orientation: state.orientation,
       accent: state.accentColor,
       bg: state.bgDataUrl,
+      logoDataUrl: state.logoDataUrl || null,
       backBgDataUrl: state.backBgDataUrl,
       data: {
         companyDisplay: state.brand.companyDisplay,

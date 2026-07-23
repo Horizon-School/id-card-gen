@@ -229,6 +229,7 @@
       expiryDisplay: getFieldVal('expiryDisplay'),
       companyFooter: getFieldVal('companyFooter'),
       backNotice: $('backNotice').innerHTML || '',
+      logoDataUrl: state.logoDataUrl || null,
       backBgDataUrl: state.backBgDataUrl || null
     };
     var tpl = {
@@ -238,6 +239,7 @@
       orientation: state.orientation,
       accent: state.accentColor,
       bg: bgDataUrl,
+      logoDataUrl: state.logoDataUrl || null,
       backBgDataUrl: state.backBgDataUrl || null,
       data: data
     };
@@ -865,6 +867,14 @@
     ctx.fillStyle=tpl.accent; ctx.fillRect(0,0,w,4);
 
     var y=16, tx=p;
+    // Draw logo if template has one
+    if (tpl.logoDataUrl) {
+      var tplLogo = document.createElement('img');
+      tplLogo.src = tpl.logoDataUrl;
+      if (tplLogo.complete) { try { ctx.drawImage(tplLogo, p, y, 34, 34); } catch(e) {} }
+      else tplLogo.onload = function() { ctx.drawImage(tplLogo, p, y, 34, 34); };
+      tx = p + 42;
+    }
     ctx.fillStyle='#252b29'; ctx.font='600 11px "DM Sans",system-ui,sans-serif';
     ctx.fillText(tpl.data.companyDisplay||'', tx, y+12);
     ctx.fillStyle='#7a8380'; ctx.font='600 8px "DM Sans",system-ui,sans-serif';
@@ -1129,6 +1139,11 @@
 
     // Front background
     if (tpl.bg) { setBgImage(tpl.bg); } else { removeBg(); }
+
+    // Logo
+    if (tpl.logoDataUrl || tpl.data.logoDataUrl) {
+      setLogoImage(tpl.logoDataUrl || tpl.data.logoDataUrl);
+    } else { removeLogo(); }
 
     // Back notice
     if (tpl.data.backNotice) {
