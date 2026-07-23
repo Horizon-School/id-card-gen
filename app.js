@@ -64,7 +64,12 @@
   // ── Field sync ─────────────────────────────────────
   function updatePreview(field, value) {
     var el = document.querySelector('[data-field="' + field + '"]');
-    if (el) el.textContent = value || '';
+    if (!el) return;
+    if (field === 'backNotice') {
+      el.innerHTML = value || '';
+    } else {
+      el.textContent = value || '';
+    }
   }
 
   function syncField(id) {
